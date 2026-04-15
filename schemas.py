@@ -3,6 +3,7 @@ from datetime import datetime
 
 # 定义注册用户模型
 class UserRegister(BaseModel):
+# field：给字段加校验规则
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6)
     email: str | None = None
