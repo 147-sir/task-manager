@@ -15,17 +15,17 @@ load_dotenv()
 
 # 注册
 router = APIRouter(prefix="/auth", tags=["认证"])
-# deprecated="auto": 自动兼容旧的、过时的加密算法。
+#1.先定加密方式: bcrypt; deprecated="auto": 自动兼容旧的、过时的加密算法。
 pwd_context = CryptContext(schemes=["bcrypt"],deprecated="auto")
+
+#2.用hash方法进行加密 (函数)
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
 
 # 登录
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-
-# 把明文密码加密成密文(函数)
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
 
 # 登录令牌(函数)
 def create_access_token(data: dict) -> str:
