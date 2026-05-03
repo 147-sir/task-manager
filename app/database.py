@@ -1,6 +1,9 @@
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from models import Base
+import os
+from dotenv import load_dotenv
+from .models import Base
+
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://root:123456@localhost:3306/task")
 
