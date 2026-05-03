@@ -5,7 +5,7 @@ from .models import Base
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://root:123456@localhost:3306/task")
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://root:123456@localhost:3306/task?charset=utf8mb4")
 
 async_engine = create_async_engine(
     DATABASE_URL,

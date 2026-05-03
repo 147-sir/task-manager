@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import DateTime, func, Integer, String, TEXT, Boolean, Enum as SQLEnum, ForeignKey
+from sqlalchemy import DateTime, func, Integer, String, TEXT, Boolean, Enum as SQLEnum, ForeignKey, TIMESTAMP
 from datetime import datetime
 from typing import Optional
 
@@ -14,7 +14,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, comment='密码')
     role: Mapped[str] = mapped_column(String(20), default='user', comment='角色')
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False, comment='是否锁定')
-    lock_until: Mapped[datetime] = mapped_column(DateTime, nullable=True, comment='锁定截止时间')
+    lock_until: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True, comment='锁定截止时间')
     tasks: Mapped[list['Task']] = relationship('Task', back_populates='user', lazy='selectin')
     refresh_tokens: Mapped[list['RefreshToken']] = relationship('RefreshToken', back_populates='user', lazy='selectin')
     login_logs: Mapped[list["LoginLog"]] = relationship("LoginLog", back_populates="user", lazy="selectin")

@@ -52,7 +52,7 @@ class TaskResponse(BaseModel):
 # ========== 管理员 ==========
 class LoginLogResponse(BaseModel):
     id: int
-    user_id: int
+    user_id: Optional[int] = None
     username: str
     ip: str
     user_agent: str

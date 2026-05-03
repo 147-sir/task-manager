@@ -80,7 +80,7 @@ async def login(request: Request, user_data: UserLogin, db: AsyncSession = Depen
     result = await db.execute(select(User).where(User.username == user_data.username))
     user = result.scalar_one_or_none()
     if user and user.is_locked and user.lock_until:
-        if user.lock_until > datetime.now(timezone.utc):
+        if user.lock_until.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
             await log_login(db, user.id, user.username, ip, user_agent, False)
             raise HTTPException(
                 status_code=403,
