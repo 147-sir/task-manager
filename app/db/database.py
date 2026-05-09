@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 import os
 from dotenv import load_dotenv
-from .models import Base
+from app.models.models import Base
 
 load_dotenv()
 

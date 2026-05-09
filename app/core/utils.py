@@ -7,7 +7,7 @@ import secrets
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
-from app.models import RefreshToken
+from app.models.models import RefreshToken
 
 load_dotenv()
 

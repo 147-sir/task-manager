@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
-from .models import User, Task
-from .dependencies import get_current_user
-from .database import get_db
-from .schemas import TaskCreate, TaskUpdate, TaskResponse
+from app.models.models import User, Task
+from app.core.dependencies import get_current_user, get_current_permissions
+from app.db.database import get_db
+from app.schemas.schemas import TaskCreate, TaskUpdate, TaskResponse
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
@@ -30,7 +30,8 @@ async def create_task(
 @router.get("/", response_model=List[TaskResponse])
 async def get_tasks(
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        permissions: set = Depends(get_current_permissions)
 ):
     result = await db.execute(select(Task).where(Task.user_id == current_user.id).order_by(Task.created_at.desc()))
     tasks = result.scalars().all()
@@ -40,7 +41,8 @@ async def get_tasks(
 async def get_task(
         task_id: int,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        permissions: set = Depends(get_current_permissions)
 ):
     result = await db.execute(select(Task).where(Task.id == task_id, Task.user_id == current_user.id))
     task = result.scalar_one_or_none()
@@ -56,7 +58,8 @@ async def update_task(
         task_id: int,
         task_data: TaskUpdate,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        permissions: set = Depends(get_current_permissions)
 ):
     # 查询任务
     result = await db.execute(select(Task).where(Task.id == task_id, Task.user_id == current_user.id))
@@ -78,7 +81,8 @@ async def update_task(
 async def delete_task(
         task_id: int,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        permissions: set = Depends(get_current_permissions)
 ):
     result = await db.execute(select(Task).where(Task.id == task_id, Task.user_id == current_user.id))
     task = result.scalar_one_or_none()

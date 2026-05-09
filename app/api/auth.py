@@ -1,16 +1,16 @@
 from fastapi import APIRouter, HTTPException,Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
-from .database import get_db
-from .models import User, RefreshToken, LoginLog
-from .schemas import UserRegister, UserResponse, UserLogin, TokenResponse, RefreshTokenRequest
-from .utils import (
+from app.db.database import get_db
+from app.models.models import User, RefreshToken, LoginLog
+from app.schemas.schemas import UserRegister, UserResponse, UserLogin, TokenResponse, RefreshTokenRequest
+from app.core.utils import (
     hash_password, verify_password, create_access_token,
-    create_refresh_token, record_failed_login,
-    clear_failed_logins, get_failed_count
+    create_refresh_token
 )
+from app.core.redis_client import get_redis
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -39,6 +39,41 @@ async def log_login(
     )
     db.add(log)
     await db.commit()
+
+# 获取 Redis连接
+r = get_redis()
+
+# Redis 登录函数
+# 获取登录失败次数
+def login_failed_count(username: str) -> int:
+    key = f"login_failed: {username}"
+    count = r.get(key)
+    return int(count) if count else 0
+
+# 记录登录失败
+def record_login_failed(username: str) -> int:
+    key = f"login_failed: {username}"
+    count = r.incr(key)
+    if count == 1:
+        r.expire(key, 900)
+    return count
+
+# 登录成功重置失败计数
+def reset_login_failed(username: str):
+    r.delete(f"login_failed: {username}")
+
+# 检查账号是否被锁定
+def is_account_locked(username: str) -> bool:
+    return r.exists(f"account_locked: {username}") == 1
+
+# 锁定账号
+def lock_account(username: str, lockout_minutes: int = 5):
+    r.setex(f"account_locked: {username}", lockout_minutes * 60, "1")
+    r.delete(f"login_failed: {username}")
+
+# 解锁账号
+def unlock_account(username: str):
+    r.delete(f"account_locked: {username}")
 
 # 注册接口函数
 @router.post("/register", response_model=UserResponse)
@@ -75,43 +110,45 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
 async def login(request: Request, user_data: UserLogin, db: AsyncSession = Depends(get_db)):
     ip = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "")
-    fail_count = get_failed_count(user_data.username)
-    # 查询用户
+    username = user_data.username
+    # 1.检查是否被锁定
+    if is_account_locked(username):
+        await log_login(db, None, username, ip, user_agent, False)
+        raise HTTPException(
+            status_code = 403,
+            detail = "用户已锁定，请5分钟后重试..."
+        )
+
+    # 2.查询用户
     result = await db.execute(select(User).where(User.username == user_data.username))
     user = result.scalar_one_or_none()
-    if user and user.is_locked and user.lock_until:
-        if user.lock_until.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
-            await log_login(db, user.id, user.username, ip, user_agent, False)
-            raise HTTPException(
-                status_code=403,
-                detail=f"用户已锁定至{user.lock_until}"
-            )
-        else:
-            user.is_locked = False
-            user.lock_until = None
-            await db.commit()
+
+    # 3.验证密码
     password_valid = user and verify_password(user_data.password, user.password_hash)
     if not user or not password_valid:
-        new_count = record_failed_login(user_data.username)
-        await log_login(db, user.id if user else None, user_data.username, ip, user_agent, False)
-        if user and new_count >= 5:
-            user.is_locked = True
-            user.lock_until = datetime.now(timezone.utc) + timedelta(seconds=15)
-            await db.commit()
+        failed_count = record_login_failed(username)
+        await log_login(db, user.id if user else None, username, ip, user_agent, False)
+        if failed_count >= 5:
+            lock_account(username)
             raise HTTPException(
-                status_code=403,
-                detail="密码错误次数过多，请15秒后重试..."
+                status_code = 403,
+                detail = "用户已锁定，请5分钟后重试..."
             )
-        remaining = 5 - new_count
-        raise  HTTPException(
+        remaining = 5 - failed_count
+        raise HTTPException(
             status_code=401,
             detail=f"用户名或密码错误，还剩 {remaining} 次尝试"
         )
-    clear_failed_logins(user_data.username)
-    # 生成 token
+
+    # 4.登录成功
+    reset_login_failed(username)
+    unlock_account(username)
+
+
+    # 5.生成 token
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = await create_refresh_token(user.id, db)
-    # 记录登录日志
+    # 6.记录登录日志
     await log_login(db, user.id, user.username, ip, user_agent, True)
     return TokenResponse(
         access_token = access_token,
