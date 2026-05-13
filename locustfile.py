@@ -7,7 +7,6 @@ class TaskManagerUser(HttpUser):
 
     def on_start(self):
         self.username = f"user_{uuid.uuid4().hex[:8]}"
-
         # 注册（加超时处理）
         with self.client.post("/auth/register", json={
             "username": self.username,

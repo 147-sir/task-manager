@@ -1,12 +1,10 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
 import os
 from dotenv import load_dotenv
 from app.models.models import Base
 
 load_dotenv()
-
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://root:123456@localhost:3306/task?charset=utf8mb4")
-
 async_engine = create_async_engine(
     DATABASE_URL,
     echo = False,
@@ -15,7 +13,7 @@ async_engine = create_async_engine(
 
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
-    expire_on_commit= False
+    expire_on_commit = False
 )
 
 async def get_db():
@@ -28,4 +26,4 @@ async def get_db():
 async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("数据库创建完成")
+        print("数据库创建完成")
