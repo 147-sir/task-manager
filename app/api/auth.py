@@ -1,17 +1,21 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
+import time
 from app.db.database import get_db
 from app.models.models import User, RefreshToken
 from app.schemas.schemas import UserRegister, UserResponse, UserLogin, TokenResponse, RefreshTokenRequest
-from app.core.utils import hash_password, verify_password, create_access_token, create_refresh_token
+from app.core.utils import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.core.auth import (
     get_client_ip, is_account_locked, log_login, record_login_failed,
     locked_account, reset_login_failed, unlock_account
 )
+from app.core.redis_client import get_redis
 
 router = APIRouter(prefix="/auth", tags=["认证"])
+security = HTTPBearer()
 
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
@@ -99,10 +103,26 @@ async def refresh(req: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     )
 
 @router.post("/logout")
-async def logout(req: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+async def logout(
+        req: RefreshTokenRequest,
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+        db: AsyncSession = Depends(get_db)
+):
+    access_token = credentials.credentials
     result = await db.execute(select(RefreshToken).where(RefreshToken.token == req.refresh_token))
     token_record = result.scalar_one_or_none()
     if token_record:
         token_record.revoked = True
-        await db.commit()
+    # request.headers.get()获取不了token，返回的是None,没有replace方法
+    # access_token = request.headers.get("Authorization").replace("Bearer ", "")
+
+    r = get_redis()
+    payload = decode_token(access_token)
+    if payload:
+        exp = payload.get("exp")
+        now = time.time()
+        ttl = int(exp - now)
+        if ttl > 0:
+            r.setex(f"blacklist:{access_token}", ttl, "1")
+    await db.commit()
     return {"msg": "退出成功"}

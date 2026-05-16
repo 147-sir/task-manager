@@ -14,6 +14,13 @@ async def get_current_user(
         db: AsyncSession = Depends(get_db)
 ) -> User:
     token = credentials.credentials
+    r = get_redis()
+    if r.get(f"blacklist:{token}"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="token已失效,请重新登录",
+            headers = {"WWW-Authenticate": "Bearer"},
+        )
     payload = decode_token(token)
     if not payload:
         raise HTTPException(
